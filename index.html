@@ -23,8 +23,10 @@
   /* mote — a nocturne. single-theme by commitment: the field is the visitor's own sky. */
   html, body { margin: 0; padding: 0; height: 100%; background: #04060b; overflow: hidden;
                overscroll-behavior: none; }
+  /* pinch-zoom stays with the browser so a zoomed-in visitor can always
+     pinch back out; single-finger drags stay with the field */
   #field { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
-           touch-action: none; cursor: default; -webkit-tap-highlight-color: transparent; }
+           touch-action: pinch-zoom; cursor: default; -webkit-tap-highlight-color: transparent; }
   #words {
     position: fixed; z-index: 3; pointer-events: none;
     max-width: 44ch; padding: 2px 4px;
@@ -1288,6 +1290,19 @@ const MoteCore = (() => {
     const f = Math.round(Math.max(0, Math.min(1, v)) * n);
     return '▮'.repeat(f) + '▯'.repeat(n - f);
   }
+  // the state of its motion sense is always legible, especially its absence
+  function motionRow(gi, S) {
+    let inner = '';
+    if (gi.seen) {
+      inner = `<span class="bar">${bar(gi.held)}</span> held · tilt ${S.tilt.mag.toFixed(2)}` +
+              (gi.grip === null ? '' : ` · grip ${gi.grip.toFixed(2)}`);
+    } else if (motionStarted) inner = `<span class="v">listening — no signal yet</span>`;
+    else if (motionRefused) inner = `<span class="v">refused — touch only</span>`;
+    else if (motionNeedsAsk) inner = `<span class="v">will ask at your next touch</span>`;
+    else return '';
+    if (!coarse && !gi.seen) return '';
+    return `<div><span class="k">motion</span> ${inner}</div>`;
+  }
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   function renderObs() {
     if (!obsOpen) return;
@@ -1298,7 +1313,7 @@ const MoteCore = (() => {
       `<div><span class="k">evidence</span> <span class="bar">${bar(mote.belief01())}</span> ${mote.belief01().toFixed(2)}</div>` +
       `<div><span class="k">humanness</span> <span class="bar">${hum === null ? 'listening…' : bar(hum)}</span> ${hum === null ? '' : hum.toFixed(2)}</div>` +
       (hp ? `<div class="note">pauses ${hp.ppm.toFixed(1)}/min · speed cv ${hp.cv.toFixed(2)} · tremor ${hp.jit.toFixed(2)}</div>` : '') +
-      (gi.seen ? `<div><span class="k">held</span> <span class="bar">${bar(gi.held)}</span>${gi.grip === null ? '' : ` grip ${gi.grip.toFixed(2)}`}</div>` : '') +
+      motionRow(gi, S) +
       `<div><span class="k">pursuit vs phantoms</span> <span class="v">${S.pursuit.toFixed(2)}</span></div>` +
       `<div><span class="k">trials</span> <span class="v">${mem.trials.won} answered / ${mem.trials.run} asked · ${mem.trials.sham} sham (${mem.trials.shamFP} fp)</span></div>` +
       `<div><span class="k">heart</span> <span class="v">${S.heart.toFixed(0)} bpm</span> <span class="k">mode</span> <span class="v">${S.mode}</span></div>`;
@@ -1397,12 +1412,20 @@ const MoteCore = (() => {
     if (motionStarted) return;
     motionStarted = true;
     addEventListener('devicemotion', (e) => {
-      const r = e.rotationRate;
-      if (!r || (r.alpha == null && r.beta == null && r.gamma == null)) return;
       const now = performance.now();
       if (now - lastMotionMs < 60) return;
-      lastMotionMs = now;
-      mote.feedMotion(Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0));
+      const r = e.rotationRate;
+      if (r && (r.alpha != null || r.beta != null || r.gamma != null)) {
+        lastMotionMs = now;
+        mote.feedMotion(Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0));
+        return;
+      }
+      // no gyroscope: linear acceleration tremor, scaled to a similar range
+      const a = e.acceleration;
+      if (a && a.x != null) {
+        lastMotionMs = now;
+        mote.feedMotion(Math.hypot(a.x, a.y, a.z || 0) * 25);
+      }
     });
     addEventListener('deviceorientation', (e) => {
       if (e.beta == null || e.gamma == null) return;
@@ -1426,7 +1449,10 @@ const MoteCore = (() => {
   }
   const motionNeedsAsk = typeof DeviceMotionEvent !== 'undefined' &&
     typeof DeviceMotionEvent.requestPermission === 'function';
+  let motionRefused = false;
   if (!motionNeedsAsk && typeof DeviceMotionEvent !== 'undefined') startMotionSensors();
+  // iOS grants user activation on the touch *release*, not the press —
+  // requestPermission called on pointerdown rejects without ever asking.
   function maybeAskMotion() {
     if (!motionNeedsAsk || motionAsked || performance.now() - bootMs < 12000) return;
     motionAsked = true;
@@ -1438,13 +1464,21 @@ const MoteCore = (() => {
         : Promise.resolve('granted')
     ]).then(([m]) => {
       if (m === 'granted') startMotionSensors();
-      else mote.noteMotionRefused();
+      else { motionRefused = true; mote.noteMotionRefused(); }
     });
   }
+  addEventListener('pointerup', maybeAskMotion);
 
   // ----- input: the whole tab is its skin -----
   addEventListener('pointermove', (e) => mote.feedPointer(e.clientX, e.clientY, 'move'));
-  addEventListener('pointerdown', (e) => { mote.feedPointer(e.clientX, e.clientY, 'down'); maybeAskMotion(); });
+  addEventListener('pointerdown', (e) => mote.feedPointer(e.clientX, e.clientY, 'down'));
+  // a quick second tap would be the browser's cue to zoom in; keep taps taps
+  let lastTouchEndMs = 0;
+  canvas.addEventListener('touchend', (e) => {
+    const now = performance.now();
+    if (now - lastTouchEndMs < 350) e.preventDefault();
+    lastTouchEndMs = now;
+  }, { passive: false });
   addEventListener('keydown', (e) => {
     if (e.repeat) return;
     if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey &&
