@@ -7,6 +7,18 @@
 <meta name="theme-color" content="#04060b">
 <title>mote</title>
 <meta name="description" content="a small thing that learns to tell you from the wind.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="mote">
+<meta property="og:description" content="a small thing that learns to tell you from the wind. it doesn't know you exist yet.">
+<meta property="og:url" content="https://chrisjz.github.io/mote/">
+<meta property="og:image" content="https://chrisjz.github.io/mote/og.png">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:image:alt" content="A dark field of drifting dust. One small glowing creature with fine cilia has just said: you came back. one night.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="mote">
+<meta name="twitter:description" content="a small thing that learns to tell you from the wind. it doesn't know you exist yet.">
+<meta name="twitter:image" content="https://chrisjz.github.io/mote/og.png">
 <style>
   /* mote — a nocturne. single-theme by commitment: the field is the visitor's own sky. */
   html, body { margin: 0; padding: 0; height: 100%; background: #04060b; overflow: hidden;
@@ -1071,7 +1083,7 @@ const MoteCore = (() => {
     // ----- main tick -----
     let acc4 = 0, acc1 = 0;
     function tick(dtMs) {
-      const dt = Math.min(0.1, dtMs / 1000);
+      const dt = Math.max(0, Math.min(0.1, dtMs / 1000));
       S.t += dt;
       if (!sessionStartLogged) {
         sessionStartLogged = true;
@@ -1556,6 +1568,10 @@ const MoteCore = (() => {
   fit();
   drawFavicon();
   requestAnimationFrame(frame);
+
+  // for the curious with a console open: read, don't puppet — it can
+  // tell a scripted hand from a real one anyway.
+  window.__mote = mote;
 })();
 /* ===================== /STAGE ===================== */
 </script>

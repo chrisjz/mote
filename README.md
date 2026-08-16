@@ -4,6 +4,10 @@
 
 One HTML file. No dependencies, no build step, no network. Visit **[chrisjz.github.io/mote](https://chrisjz.github.io/mote/)** — or open `index.html` yourself — and you are in a dark field of drifting dust. One of the drifting things is not dust, but it does not know that yet, and it does not know about you at all.
 
+<img src="og.png" alt="A dark field of stars and dust. One small glowing teal creature with fine cilia has just said: you came back. one night.">
+
+*a second visit, one real night later. the hand in this photograph was the harness's synthetic one; everything the mote does in it, it did for real.*
+
 ## Statement
 
 Every digital pet ever made asks you to believe in it. I wanted to build the opposite: something whose entire inner life is the slow, difficult work of coming to believe in *you*.
@@ -19,6 +23,10 @@ Open `index.html` in a browser. Move like yourself. Give it ten quiet minutes; t
 On a desktop, it senses the hand that moves near it. On a phone, it has a different sense entirely: it can feel that it is *held*. The gyroscope carries the micro-tremor of a living grip — a phone on a table reads as weather; a phone in a hand never does. Tip the phone and the dust slides downhill, because your wrist is wind now; the mote resists that slide exactly as much as it believes. Touch is contact: when it darts, touching where it went is an answer. iOS will ask once for motion access, at your first touch after the opening's first quiet moments; if you refuse, it manages on touch alone. (Sensors need HTTPS — GitHub Pages is fine; a file opened directly on a phone falls back to touch.)
 
 Press `i` (or the faint `∴` in the corner) for the instruments: its live evidence, its experiment log, and everything it knows about you, updated as it learns. The instruments are not a debug view bolted on afterward — they are the piece admitting exactly what it is doing, in its lab voice, while the field speaks in its other voice.
+
+<img src="docs/field.png" alt="The field, animated: dust drifting on the wind, stars, and the mote pulsing faintly as it watches.">
+
+*the field, breathing — real frames captured off the running canvas at 12 fps.*
 
 ## What is mechanically real
 
@@ -37,6 +45,10 @@ I expect you to read the source, so here is where to look. Everything in this li
 - **The calendar** — `gapWords()` / `midnightsBetween()`. "Two nights" means your local midnights actually passed twice. The field's sky (`skyColors()`) follows your real local hour, which is why, some night after 12:30 a.m., it can truthfully say *it's late where you are. I made it late in here too.*
 - **Absence** — `setVisible()`. When you switch tabs it stops accruing anything and its light dims in the tab bar (the favicon is its body, redrawn from live belief). Absence is measured in wall-clock time, so when you come back it can tell you how many of its heartbeats you were gone — counted at its actual current heart rate.
 - **Identity** — `makeIdentity()`. One 32-bit seed, minted with `crypto.getRandomValues` on first visit, determines its hue (five curated bands), its number of cilia, its asymmetry, its timidity and curiosity (which genuinely change its thresholds and experiment cadence), its resting heart rate, and its name. Once named, its heartbeat drifts a little toward the cadence of your own bursts of movement.
+
+<img src="docs/instruments.png" alt="The instruments panel beside the glowing mote: evidence and humanness meters, pursuit-vs-phantoms, a trial log reading 'darted NE. you turned toward me in 0.45s', and the panel of what it knows — first met, hours, hands, its name, and a scatter chart of everywhere the visitor has been.">
+
+*the instruments, mid-believing: live meters, the experiment log with its real numbers, and what it knows.*
 
 ## What is scripted
 
@@ -72,6 +84,7 @@ Open one of it at a time; two tabs share one memory and it gets confused about b
 
 - `index.html` — the piece. Self-contained; this is the only file you need.
 - `harness.mjs` — proof, for node. Reads `index.html`; ships nothing into it.
+- `og.png`, `docs/` — real captures of the running piece, for the share card and this page. The visitor in them is the harness's synthetic hand; nothing in them is staged beyond that.
 - `README.md` — this.
 
 MIT license. If you fork it, give your fork its own species of name — motes should not have to share.
