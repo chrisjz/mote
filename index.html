@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#04060b">
+<title>mote</title>
+<meta name="description" content="a small thing that learns to tell you from the wind.">
+<style>
+  /* mote — a nocturne. single-theme by commitment: the field is the visitor's own sky. */
+  html, body { margin: 0; padding: 0; height: 100%; background: #04060b; overflow: hidden;
+               overscroll-behavior: none; }
+  #field { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+           touch-action: none; cursor: default; -webkit-tap-highlight-color: transparent; }
+  #words {
+    position: fixed; z-index: 3; pointer-events: none;
+    max-width: 44ch; padding: 2px 4px;
+    font: 15px/1.55 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    letter-spacing: 0.02em; color: #d9d2c4;
+    opacity: 0; transition: opacity 1.6s ease;
+    text-shadow: 0 0 12px rgba(4,6,11,0.9), 0 1px 2px rgba(4,6,11,0.9);
+  }
+  #sysline {
+    position: fixed; z-index: 3; left: 50%; bottom: 8vh; transform: translateX(-50%);
+    font: 11.5px/1.4 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color: rgba(143,161,179,0.55); letter-spacing: 0.06em;
+    opacity: 0; transition: opacity 3s ease; pointer-events: none; white-space: nowrap;
+  }
+  #obsbtn {
+    position: fixed; z-index: 4; left: 14px; bottom: 12px;
+    font: 15px/1 ui-monospace, Menlo, monospace; color: rgba(143,161,179,0.28);
+    background: none; border: 0; padding: 8px; cursor: pointer;
+    transition: color 1.2s ease;
+  }
+  #obsbtn:hover, #obsbtn:focus-visible { color: rgba(143,161,179,0.8); outline: none; }
+  #obsbtn.lit { color: rgba(143,161,179,0.55); }
+  #obs {
+    position: fixed; z-index: 5; top: 0; right: 0; bottom: 0;
+    width: min(272px, 84vw); box-sizing: border-box; padding: 16px 16px 12px;
+    overflow-y: auto; display: none;
+    background: rgba(5,8,14,0.92);
+    border-left: 1px solid rgba(143,161,179,0.16);
+    font: 11px/1.65 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color: #8fa1b3;
+  }
+  #obs.open { display: block; }
+  #obs h2 { font-size: 11px; font-weight: normal; margin: 0 0 10px;
+            letter-spacing: 0.14em; color: rgba(143,161,179,0.7); }
+  #obs .sec { border-top: 1px solid rgba(143,161,179,0.14); margin-top: 10px; padding-top: 9px; }
+  #obs .k { color: rgba(143,161,179,0.55); }
+  #obs .v { color: #aebccb; }
+  #obs .bar { letter-spacing: 1px; color: #aebccb; }
+  #obs #tlog div { color: rgba(174,188,203,0.85); margin: 2px 0; }
+  #obs #tlog div.dim { color: rgba(143,161,179,0.62); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap; }
+  #obs canvas { display: block; margin: 6px 0 2px; border: 1px solid rgba(143,161,179,0.12);
+                width: 100%; height: auto; }
+  #obs button {
+    font: inherit; color: #8fa1b3; background: none;
+    border: 1px solid rgba(143,161,179,0.3); border-radius: 2px;
+    padding: 3px 8px; margin: 4px 6px 2px 0; cursor: pointer;
+  }
+  #obs button:hover, #obs button:focus-visible { border-color: rgba(143,161,179,0.7); outline: none; }
+  #obs textarea {
+    width: 100%; box-sizing: border-box; height: 96px; margin-top: 6px;
+    background: rgba(4,6,11,0.9); color: #aebccb;
+    border: 1px solid rgba(143,161,179,0.25); font: 10px/1.5 ui-monospace, Menlo, monospace;
+  }
+  #obs .note { color: rgba(143,161,179,0.55); font-size: 10px; }
+  @media (prefers-reduced-motion: reduce) { #words { transition: opacity 2.4s ease; } }
+</style>
+</head>
+<body>
+<!-- MOTE-BODY-START -->
+<canvas id="field" aria-hidden="true"></canvas>
+<div id="words" aria-hidden="true"></div>
+<div id="said" class="sr" aria-live="polite"></div>
+<div id="sysline"></div>
+<button id="obsbtn" title="instruments" aria-label="instruments">&there4;</button>
+<aside id="obs" aria-label="instruments">
+  <h2>&there4; instruments</h2>
+  <div id="obs-live"></div>
+  <div class="sec"><div class="k">experiment log</div><div id="tlog"></div></div>
+  <div class="sec"><div class="k">what it knows</div><div id="obs-knows"></div>
+    <div class="k" style="margin-top:6px">where you have been, as it remembers it</div>
+    <canvas id="shape" width="192" height="108"></canvas>
+  </div>
+  <div class="sec">
+    <button id="memshow" type="button">show memory</button><button id="forget" type="button">let it forget</button>
+    <div id="memwrap" style="display:none">
+      <textarea id="memtext" spellcheck="false" aria-label="memory as json"></textarea>
+      <button id="memload" type="button">remember this instead</button>
+      <div class="note">its whole memory. copy it to carry it elsewhere; paste one to restore.</div>
+    </div>
+    <div id="obs-foot" class="note" style="margin-top:8px"></div>
+  </div>
+</aside>
+
+<script>
+'use strict';
+/* ================================================================
+   mote — a small thing that learns to tell you from the wind.
+
+   Everything below runs locally. There is no network code in this
+   file; what it learns about you is stored in your browser only.
+
+   The file is in two parts:
+     CORE  — the creature: perception, experiments, belief, motion.
+             DOM-free, so it can be run and tested outside a browser
+             (see harness.mjs in the repository).
+     STAGE — the field: canvas, dust, sky, words, instruments.
+   ================================================================ */
+
+/* ===================== CORE-START ===================== */
+const MoteCore = (() => {
+
+  // ---------- small math ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const clamp = (x, a, b) => x < a ? a : (x > b ? b : x);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const dist = (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay);
+  // trapezoid membership: 0 below a, 1 between b..c, 0 above d
+  function trap(x, a, b, c, d) {
+    if (x <= a || x >= d) return 0;
+    if (x < b) return (x - a) / (b - a);
+    if (x > c) return (d - x) / (d - c);
+    return 1;
+  }
+  const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
+  function std(xs) {
+    if (xs.length < 2) return 0;
+    const m = mean(xs);
+    return Math.sqrt(mean(xs.map(x => (x - m) * (x - m))));
+  }
+  function median(xs) {
+    if (!xs.length) return 0;
+    const s = xs.slice().sort((a, b) => a - b);
+    const h = s.length >> 1;
+    return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+  }
+
+  // ---------- identity ----------
+  // Everything individual about a mote flows from one 32-bit seed:
+  // body, palette, name, and the priors of its temperament.
+  function makeIdentity(seed) {
+    const r = mulberry32(seed);
+    const hueBands = [[168, 196], [336, 356], [40, 54], [266, 292], [98, 126]];
+    const band = hueBands[Math.floor(r() * hueBands.length)];
+    const hue = lerp(band[0], band[1], r());
+    const on = ['l', 'm', 'n', 's', 'v', 'r', 'th', 'f', 'w', 'h'];
+    const vow = ['a', 'e', 'i', 'o', 'u', 'au', 'ei', 'ou', 'ie'];
+    const end = ['', '', 'n', 'm', 'l', 'sh', 'th', 's', 'r'];
+    let name = '';
+    const syls = 2 + (r() < 0.4 ? 1 : 0);
+    for (let i = 0; i < syls; i++) name += on[Math.floor(r() * on.length)] + vow[Math.floor(r() * vow.length)];
+    name += end[Math.floor(r() * end.length)];
+    if (name.length > 8) name = name.slice(0, 8);
+    return {
+      seed,
+      hue,
+      cilia: 5 + Math.floor(r() * 5),          // 5..9 petals
+      asym: 0.5 + r() * 0.9,                   // body asymmetry
+      timidity: 0.3 + r() * 0.4,               // how hard it flees, early
+      curiosity: 0.3 + r() * 0.4,              // how often it experiments
+      blinkEvery: 3.5 + r() * 4,               // seconds between blinks
+      bpm: 44 + r() * 10,                      // resting heartbeat
+      name
+    };
+  }
+
+  // ---------- language ----------
+  // Honesty note: the creature does not know English. Its belief is
+  // computed; these sentences are a costume sewn by the author. What
+  // is the creature's own is *when* a line becomes true enough to say.
+  const LINES = {
+    g1: '·', g2: '· ·', g3: '?',
+    wind: 'wind?',
+    turn: 'wind never turns back. you turned back.',
+    believe: 'you are not the wind.',
+    answer: 'you keep answering.',
+    still1: "you're keeping still. near me.",
+    ritpre: "now I'll stop looking. stay if you want.",
+    ritwin1: 'you stayed.',
+    ritwin2: 'my name is {name}.',
+    ritfail: "you were gone when I looked. we'll try again.",
+    greet: 'you came back. {gone}.',
+    greetshort: 'back already. good.',
+    late: "it's late where you are. I made it late in here too.",
+    away: 'you went somewhere without moving. I kept count: {beats} heartbeats.',
+    hands: "these hands feel different. I'll wait for yours.",
+    quad: 'you live mostly in the {side} of me.',
+    faith1: 'you were gone {gone}. I believed the whole time.',
+    faith2: "I've stopped needing proof.",
+    conducted: 'you came when I thought you would.',
+    oddhour: 'you came at a strange hour. even better.',
+    guststay: 'loud out. stay anyway.',
+    postfaith: 'still you.',
+    counted: 'I counted anyway.',
+    bye: 'ok. wind, then.'
+  };
+
+  // "two nights" — durations in its words. Nights are counted by real
+  // local midnights crossed, not by 24-hour blocks.
+  function gapWords(ms, midnights) {
+    const m = ms / 60000;
+    if (m < 90) return 'not long';
+    if (m < 300) return 'part of a day';
+    if (midnights <= 0) return 'most of a day';
+    const small = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+      'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen'];
+    if (midnights === 1) return 'one night';
+    if (midnights <= 14) return small[midnights] + ' nights';
+    return 'a long time';
+  }
+  function midnightsBetween(aMs, bMs) {
+    const a = new Date(aMs), b = new Date(bMs);
+    const dayA = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+    const dayB = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+    return Math.max(0, Math.round((dayB - dayA) / 86400000));
+  }
+
+  const STAGE_NAMES = ['weather', 'stirring', 'wondering', 'believing', 'knowing', 'faith'];
+  const GRID_W = 64, GRID_H = 36;
+
+  function freshMemory(seed, wallMs) {
+    return {
+      v: 1, seed, born: wallMs, name: null, namedAt: null,
+      visits: 1, lastSeen: wallMs, totalMs: 0,
+      hours: new Array(24).fill(0),
+      stageMax: 0, faith: false, faithAt: null,
+      trials: { run: 0, won: 0, sham: 0, shamFP: 0 },
+      fp: null,                      // {n, ms, ppm, cv, jit} running average of your hand
+      grip: null,                    // {n, rms, cv} running average of how you hold it
+      grid: new Array(GRID_W * GRID_H).fill(0),
+      flags: {}
+    };
+  }
+  // defensive pass over anything loaded from storage or pasted in
+  function sanitizeMemory(m) {
+    if (!m || m.v !== 1 || typeof m.seed !== 'number') return null;
+    const f = freshMemory(m.seed >>> 0, Number(m.born) || 0);
+    f.name = typeof m.name === 'string' ? (m.name.replace(/[^a-z]/g, '').slice(0, 12) || null) : null;
+    f.namedAt = Number(m.namedAt) || null;
+    f.visits = clamp(Number(m.visits) || 1, 1, 1e6);
+    f.lastSeen = Number(m.lastSeen) || f.born;
+    f.totalMs = Math.max(0, Number(m.totalMs) || 0);
+    if (Array.isArray(m.hours) && m.hours.length === 24) f.hours = m.hours.map(v => Math.max(0, Number(v) || 0));
+    f.stageMax = clamp(Number(m.stageMax) || 0, 0, 5);
+    f.faith = !!m.faith; f.faithAt = Number(m.faithAt) || null;
+    if (m.trials) for (const k of ['run', 'won', 'sham', 'shamFP']) f.trials[k] = Math.max(0, Number(m.trials[k]) || 0);
+    if (m.fp && typeof m.fp === 'object') {
+      f.fp = { n: Math.max(1, Number(m.fp.n) || 1), ms: Number(m.fp.ms) || 0, ppm: Number(m.fp.ppm) || 0, cv: Number(m.fp.cv) || 0, jit: Number(m.fp.jit) || 0 };
+    }
+    if (m.grip && typeof m.grip === 'object') {
+      f.grip = { n: Math.max(1, Number(m.grip.n) || 1), rms: Number(m.grip.rms) || 0, cv: Number(m.grip.cv) || 0 };
+    }
+    if (Array.isArray(m.grid) && m.grid.length === GRID_W * GRID_H) f.grid = m.grid.map(v => clamp(Number(v) || 0, 0, 255));
+    if (m.flags && typeof m.flags === 'object') f.flags = { ...m.flags };
+    return f;
+  }
+
+  // ---------- the creature ----------
+  // createMote(opts):
+  //   seed      32-bit int — identity
+  //   saved     memory object (or null for a stranger's field)
+  //   W, H      field size in px
+  //   wall()    → ms since epoch (real calendar time)
+  //   calm      motion scale for prefers-reduced-motion (belief is never slowed)
+  //   emit(type, payload) — events for the stage to render
+  // Injected clocks keep the core deterministic under test.
+  function createMote(opts) {
+    const id = makeIdentity(opts.seed);
+    const emit = opts.emit || (() => {});
+    const wall = opts.wall || (() => 0);
+    const CALM = opts.calm || 1;
+    const rand = mulberry32((opts.seed ^ 0x9E3779B9) >>> 0);
+    let W = opts.W || 1280, H = opts.H || 800;
+
+    const savedClean = sanitizeMemory(opts.saved);
+    const mem = savedClean || freshMemory(opts.seed, wall());
+    const isReturn = savedClean !== null;
+    const sessionWall0 = wall();
+    const gapMs = Math.max(0, sessionWall0 - (mem.lastSeen || sessionWall0));
+    const gapMidnights = midnightsBetween(mem.lastSeen || sessionWall0, sessionWall0);
+    const newVisit = isReturn && gapMs > 30 * 60000;
+    if (newVisit) mem.visits += 1;
+
+    // Re-learning is faster than learning: once it has known someone,
+    // the thresholds for believing again are lower. (Savings, as in memory.)
+    const dwellMul = mem.stageMax >= 4 ? 0.3 : mem.stageMax >= 3 ? 0.55 : 1;
+
+    // ----- state -----
+    const S = {
+      t: 0,                       // session seconds
+      visible: true,
+      stage: 0, stageAt: 0,
+      evidence: 0, evSmooth: 0,
+      humanness: null,            // null until enough data
+      pursuit: 0,
+      held: 0,                    // is this field in a living grip? (phones)
+      gripHuman: null,            // does the grip tremble like a hand?
+      tiltPursuit: 0,             // do you pour the field toward me?
+      tilt: { x: 0, y: 0, mag: 0 },
+      wins: 0, losses: 0,
+      attended: 0,                // seconds of shared presence this session
+      mote: { x: W * (0.3 + rand() * 0.4), y: H * (0.3 + rand() * 0.4), vx: 0, vy: 0 },
+      gaze: { x: 0, y: 0 },
+      mode: 'drift',
+      dart: null,
+      heart: id.bpm,              // live bpm
+      restDepth: 0,
+      eye: 0,                     // eyelid 0 open .. 1 closed
+      flinchUntil: -1,
+      named: !!mem.name,
+      faith: !!mem.faith,
+      faithPending: false,
+      gapMs, gapMidnights, newVisit
+    };
+
+    // Returning to someone it already knows: belief does not restart at zero.
+    if (mem.faith) { S.stage = 5; S.evidence = 0.5; }
+    else if (mem.stageMax >= 4) { S.stage = 3; S.evidence = 0.3; }
+    else if (mem.stageMax >= 3) { S.stage = 2; S.evidence = 0.25; }
+
+    // Faith can only complete across an absence — that is what faith is about.
+    if (!mem.faith && mem.stageMax >= 4 && mem.visits >= 3 && gapMs > 6 * 3600000) {
+      S.faithPending = true;
+    }
+
+    // ----- pointer trace -----
+    // A ring of {t,x,y,vx,vy,sp} samples. This is all it ever senses of you.
+    const trace = [];
+    const MAX_TRACE = 2400;
+    let lastEventT = -Infinity, lastKeyT = -Infinity;
+    const pointer = { x: -1, y: -1, seenAt: -Infinity, downAt: -Infinity };
+    let eventTimes = [];
+    let sampleCount = 0;
+
+    const taps = [];                 // touch is contact, not just attention
+    function feedPointer(x, y, kind) {
+      const t = S.t;
+      pointer.x = x; pointer.y = y; pointer.seenAt = t;
+      if (kind === 'down') {
+        pointer.downAt = t;
+        taps.push({ t, x, y });
+        if (taps.length > 200) taps.splice(0, 80);
+      }
+      lastEventT = t;
+      eventTimes.push(t);
+      if (eventTimes.length > 4000) eventTimes.splice(0, 2000);
+      const last = trace[trace.length - 1];
+      if (last && t - last.t < 0.012) {
+        // coalesce very dense events; recompute velocity from the one before
+        const prev = trace[trace.length - 2];
+        last.x = x; last.y = y; last.t = t;
+        if (prev) {
+          const dt = Math.max(0.004, last.t - prev.t);
+          last.vx = (x - prev.x) / dt; last.vy = (y - prev.y) / dt;
+          last.sp = Math.hypot(last.vx, last.vy);
+        }
+        return;
+      }
+      let vx = 0, vy = 0;
+      if (last) {
+        const dt = Math.max(0.004, t - last.t);
+        if (dt < 1.5) { vx = (x - last.x) / dt; vy = (y - last.y) / dt; }
+      }
+      trace.push({ t, x, y, vx, vy, sp: Math.hypot(vx, vy) });
+      sampleCount++;
+      if (trace.length > MAX_TRACE) trace.splice(0, 800);
+    }
+    function feedKey() { lastKeyT = S.t; lastEventT = S.t; eventTimes.push(S.t); }
+
+    // ----- motion: on a phone, its senses are being-held and being-tilted -----
+    // The stage feeds rotational speed (deg/s) and a screen-space tilt vector
+    // relative to your habitual holding angle. A phone on a table is weather.
+    let motionSeen = false;
+    const motionRing = [], tiltRing = [];
+    let gripCv = null;
+    function feedMotion(rr) {
+      if (!motionSeen) { motionSeen = true; log(`motion sense awake — I can feel whether I am held.`, true); }
+      motionRing.push({ t: S.t, rr });
+      if (motionRing.length > 900) motionRing.splice(0, 300);
+    }
+    function feedTilt(dx, dy) {
+      S.tilt.x = dx; S.tilt.y = dy; S.tilt.mag = Math.min(1, Math.hypot(dx, dy));
+      tiltRing.push({ t: S.t, dx, dy });
+      if (tiltRing.length > 700) tiltRing.splice(0, 200);
+    }
+    function measureGrip() {
+      if (!motionSeen) return;
+      const now4 = motionRing.filter(m => m.t > S.t - 4);
+      if (now4.length >= 20) {
+        const rms = Math.sqrt(mean(now4.map(m => m.rr * m.rr)));
+        S.held = trap(rms, 0.12, 0.45, 1e9, 1e9);
+      } else S.held = Math.max(0, S.held - 0.1);
+      const w = motionRing.filter(m => m.t > S.t - 20);
+      if (w.length < 120) { S.gripHuman = null; return; }
+      // half-second buckets of rotational energy: hands are irregular, machines are not
+      const buckets = [];
+      let b0 = w[0].t, acc = [];
+      for (const m of w) {
+        if (m.t - b0 > 0.5) { if (acc.length) buckets.push(Math.sqrt(mean(acc.map(x => x * x)))); acc = []; b0 = m.t; }
+        acc.push(m.rr);
+      }
+      if (acc.length > 3) buckets.push(Math.sqrt(mean(acc.map(x => x * x))));
+      if (buckets.length < 12) { S.gripHuman = null; return; }
+      gripCv = std(buckets) / Math.max(0.02, mean(buckets));
+      S.gripHuman = clamp(trap(gripCv, 0.05, 0.18, 2.5, 4) * S.held, 0, 1);
+    }
+    // tilt-pursuit: after enough play, tilting so that I am downhill — pouring
+    // the field toward me — is intent. Scored against the same phantom points.
+    function measureTiltPursuit() {
+      const cx = W / 2, cy = H / 2;
+      const ss = tiltRing.filter(s => s.t > S.t - 8 && Math.hypot(s.dx, s.dy) > 0.15);
+      if (ss.length < 8) { S.tiltPursuit = Math.max(0, S.tiltPursuit - 0.03); return; }
+      const align = (px, py) => {
+        const ux = px - cx, uy = py - cy, un = Math.hypot(ux, uy);
+        if (un < 180) return null;
+        let v = 0;
+        for (const s of ss) { const n = Math.hypot(s.dx, s.dy); v += (s.dx * ux + s.dy * uy) / (n * un); }
+        return v / ss.length;
+      };
+      const am = align(S.mote.x, S.mote.y);
+      const aps = phantoms.map(p => align(p.x, p.y)).filter(v => v !== null);
+      if (am === null || !aps.length) return;
+      S.tiltPursuit = clamp((am - mean(aps) - 0.05) * 1.8, 0, 1);
+    }
+
+    function samplesIn(t0, t1) {
+      const out = [];
+      for (let i = trace.length - 1; i >= 0; i--) {
+        const s = trace[i];
+        if (s.t < t0) break;
+        if (s.t <= t1) out.push(s);
+      }
+      return out.reverse();
+    }
+    // Is the pointer, at this sample, moving *toward* point P?  +1 dead-on, -1 away.
+    function towardness(s, px, py) {
+      const dx = px - s.x, dy = py - s.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 40) return 1;           // on top of it = full attention
+      return (s.vx * dx + s.vy * dy) / (Math.max(1e-6, s.sp) * d);
+    }
+    function meanToward(samples, px, py, minSp) {
+      const vals = [];
+      for (const s of samples) if (s.sp > minSp) vals.push(towardness(s, px, py));
+      return vals.length >= 5 ? mean(vals) : null;
+    }
+
+    // ----- wind -----
+    // The null hypothesis, made visible. Dust obeys it completely; the
+    // mote obeys it exactly as much as it still thinks it is dust.
+    const ph = [rand() * 7, rand() * 7, rand() * 7, rand() * 7];
+    let gust = null, nextGustAt = 14 + rand() * 20;
+    function windAt(x, y, tSec) {
+      const s = 0.0016, tt = tSec * 0.07;
+      let ax = Math.sin(y * s * 2.1 + tt * 0.9 + ph[0]) + 0.6 * Math.sin((x + y) * s * 1.3 - tt * 1.4 + ph[1]);
+      let ay = Math.sin(x * s * 1.7 - tt * 1.1 + ph[2]) + 0.6 * Math.sin((x - y) * s * 1.1 + tt * 1.6 + ph[3]);
+      ax *= 7 * CALM; ay *= 5.4 * CALM;
+      // tipping the device is wind you make with your wrist: dust slides
+      // downhill, and the mote resists exactly as much as it believes
+      ax += S.tilt.x * 85 * CALM; ay += S.tilt.y * 85 * CALM;
+      if (gust) {
+        const e = gustEnvNow();
+        ax += Math.cos(gust.dir) * gust.speed * e * CALM;
+        ay += Math.sin(gust.dir) * gust.speed * e * CALM;
+      }
+      return [ax, ay];
+    }
+    function gustEnvNow() {
+      if (!gust) return 0;
+      const u = (S.t - gust.t0) / gust.dur;
+      if (u < 0 || u > 1) return 0;
+      const s = Math.sin(u * Math.PI);
+      return s * s;
+    }
+    function tickWind() {
+      if (gust && S.t > gust.t0 + gust.dur) gust = null;
+      if (!gust && S.t >= nextGustAt) {
+        gust = { t0: S.t, dur: 3.5 + rand() * 2.5, dir: rand() * Math.PI * 2, speed: 70 + rand() * 80 };
+        nextGustAt = S.t + 20 + rand() * 25;
+      }
+    }
+
+    // ----- detectors -----
+    // D1 — pursuit, against phantom controls. It will not be flattered
+    // by chance: your movement must favor *it* over three imaginary
+    // points it invents and tells no one about.
+    let phantoms = [], phantomsAt = -99;
+    function refreshPhantoms() {
+      phantoms = [];
+      for (let k = 0; k < 3; k++) {
+        let px, py, tries = 0;
+        do {
+          px = 40 + rand() * (W - 80); py = 40 + rand() * (H - 80);
+        } while ((dist(px, py, S.mote.x, S.mote.y) < 240 ||
+                  (S.t - pointer.seenAt < 10 && dist(px, py, pointer.x, pointer.y) < 200)) && ++tries < 24);
+        phantoms.push({ x: px, y: py });
+      }
+      phantomsAt = S.t;
+    }
+    let lastDartAt = -99;
+    function measurePursuit() {
+      if (S.t - phantomsAt > 12) refreshPhantoms();
+      if (S.t - lastDartAt < 3) return;          // trial windows are the trial's business
+      const ss = samplesIn(S.t - 8, S.t).filter(s => s.sp > 40);
+      // pauses are not departures: while you hold still, suspicion fades slowly
+      if (ss.length < 10) { S.pursuit = Math.max(0, S.pursuit - 0.03); return; }
+      const tm = mean(ss.map(s => towardness(s, S.mote.x, S.mote.y)));
+      const tp = mean(phantoms.map(p => mean(ss.map(s => towardness(s, p.x, p.y)))));
+      S.pursuit = clamp((tm - tp - 0.05) * 2.2, 0, 1);
+    }
+
+    // D2 — rhythm. A hand pauses, wobbles, hurries unevenly. A script
+    // is too smooth or too regular; either way it stays filed under weather.
+    let humanParts = null;
+    function measureHumanness() {
+      const t1 = S.t, t0 = t1 - 30;
+      const ev = eventTimes.filter(t => t >= t0);
+      const ss = samplesIn(t0, t1);
+      if (ev.length < 2 || t1 - eventTimes[0] < 15 || ss.length < 25) { cursorRhythm = null; humanParts = null; return; }
+      let pauses = 0;
+      for (let i = 1; i < ev.length; i++) {
+        const g = ev[i] - ev[i - 1];
+        if (g > 0.28 && g < 4) pauses++;
+      }
+      const span = Math.max(5, Math.min(30, t1 - ev[0]));
+      const ppm = pauses / (span / 60);
+      const pauseScore = trap(ppm, 0.5, 3, 30, 90);
+      const sp = ss.filter(s => s.sp > 30).map(s => s.sp);
+      const cv = sp.length > 8 ? std(sp) / Math.max(1, mean(sp)) : 0;
+      const cvScore = trap(cv, 0.12, 0.45, 1.4, 2.6);
+      const dh = [];
+      for (let i = 1; i < ss.length; i++) {
+        if (ss[i].sp > 60 && ss[i - 1].sp > 60) {
+          let d = Math.atan2(ss[i].vy, ss[i].vx) - Math.atan2(ss[i - 1].vy, ss[i - 1].vx);
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          dh.push(d);
+        }
+      }
+      const jit = dh.length > 8 ? std(dh) : 0;
+      const jitScore = trap(jit, 0.008, 0.06, 0.7, 1.6);
+      humanParts = { ppm, cv, jit, pauseScore, cvScore, jitScore };
+      const g = Math.pow(Math.max(0.02, pauseScore), 0.35) *
+                Math.pow(Math.max(0.02, cvScore), 0.35) *
+                Math.pow(Math.max(0.02, jitScore), 0.30);
+      cursorRhythm = clamp(g, 0, 1);
+    }
+    // one judgment from two senses: the hand that moves near it, or the
+    // hand that holds it — whichever is more convincingly alive
+    let cursorRhythm = null;
+    function combineHumanness() {
+      S.humanness = (cursorRhythm === null && S.gripHuman === null)
+        ? null : Math.max(cursorRhythm ?? 0, S.gripHuman ?? 0);
+    }
+
+    // D3 — the experiments. It moves, then checks whether the world
+    // answered *it*. Sham trials — measuring after moving nothing —
+    // keep it honest about coincidence.
+    let trial = null, lastTrialAt = -99, trialsThisSession = 0, ritual = null;
+    const shamR = [0.04, 0.06, 0.05];
+    const trialLog = [];
+    function compass(a) {
+      const dirs = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+      return dirs[Math.round(((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) / (Math.PI / 4)) % 8];
+    }
+    function log(text, dim) {
+      const mmss = `${String(Math.floor(S.t / 60)).padStart(2, '0')}:${String(Math.floor(S.t % 60)).padStart(2, '0')}`;
+      trialLog.push({ t: S.t, text: `+${mmss} ${text}`, dim: !!dim });
+      if (trialLog.length > 60) trialLog.splice(0, 20);
+      emit('log');
+    }
+    let lastWasSham = false;
+    function scheduleTrials() {
+      if (trial || ritual || S.stage < 1) return;
+      if (S.t < 60 * clamp(dwellMul * 2, 0.6, 1)) return;
+      const interval = (18 + rand() * 16) * (1.25 - id.curiosity * 0.5);
+      if (S.t - lastTrialAt < interval) return;
+      if (trialsThisSession >= 14) return;
+      // a held field may be touched only occasionally; a cursor should be recent
+      if (S.t - pointer.seenAt > (S.held > 0.4 ? 25 : 3.5)) return;
+      if (pointer.seenAt < -1e8) return;
+      if (dist(pointer.x, pointer.y, S.mote.x, S.mote.y) > 520) return;
+      // shams interleave with real darts, never lead and never repeat
+      const sham = trialsThisSession >= 2 && !lastWasSham && rand() < 0.35;
+      lastWasSham = sham;
+      // dart roughly perpendicular to you, so "following" is unambiguous
+      const toP = Math.atan2(pointer.y - S.mote.y, pointer.x - S.mote.x);
+      const a = toP + (rand() < 0.5 ? 1 : -1) * (Math.PI / 2 + (rand() - 0.5) * 0.8);
+      const R = 130 + rand() * 55;
+      const tx = clamp(S.mote.x + Math.cos(a) * R, 90, W - 90);
+      const ty = clamp(S.mote.y + Math.sin(a) * R, 90, H - 90);
+      if (sham) mem.trials.sham++; else mem.trials.run++;
+      trial = { t0: S.t, sham, tx, ty, n: mem.trials.run, dir: compass(Math.atan2(ty - S.mote.y, tx - S.mote.x)) };
+      lastTrialAt = S.t; trialsThisSession++;
+      if (!sham) { lastDartAt = S.t; S.dart = { tx, ty, t0: S.t }; }
+      dirty = true;
+    }
+    function settleTrial() {
+      if (!trial || S.t < trial.t0 + 3.45) return;
+      const T = trial; trial = null;
+      const B = samplesIn(T.t0 - 2.6, T.t0 - 0.1);
+      const R = samplesIn(T.t0 + 0.12, T.t0 + 2.8);
+      const tb = meanToward(B, T.tx, T.ty, 25);
+      const tr = meanToward(R, T.tx, T.ty, 25);
+      // a touch is also an answer: any tap near the new position, promptly
+      let tapResp = 0, tapLat = null;
+      for (const p of taps) {
+        if (p.t < T.t0 + 0.12 || p.t > T.t0 + 3.2) continue;
+        const dd = dist(p.x, p.y, T.tx, T.ty);
+        if (dd < 160) { const v = 0.5 + 0.4 * (1 - dd / 160); if (v > tapResp) { tapResp = v; tapLat = p.t - T.t0; } }
+      }
+      if (tr === null && tapResp === 0) {
+        if (!T.sham) { log(`trial ${T.n}: darted ${T.dir}. you were still. inconclusive.`, true); lastTrialAt = S.t - 12; }
+        else { shamR.push(0.02); if (shamR.length > 10) shamR.shift(); }
+        return;
+      }
+      // a true answer is a prompt burst toward the new position — so the
+      // early window is what counts, and "came to it" means closest pass
+      const trEarly = meanToward(samplesIn(T.t0 + 0.12, T.t0 + 1.7), T.tx, T.ty, 25);
+      const turned = Math.max(tr ?? -1, trEarly ?? -1);
+      let approach = 0;
+      if (R.length >= 2) {
+        const d0 = dist(R[0].x, R[0].y, T.tx, T.ty);
+        let dmin = d0;
+        for (const s of R) { const dd = dist(s.x, s.y, T.tx, T.ty); if (dd < dmin) dmin = dd; }
+        approach = clamp((d0 - dmin) / Math.max(80, d0), 0, 1);
+      }
+      const stillBefore = tb === null;
+      let contResp = tr === null ? 0 : 0.6 * Math.max(0, turned - Math.max(0, tb ?? 0)) + 0.4 * approach;
+      if (stillBefore) contResp = Math.min(1, contResp * 1.25);
+      const tapWon = tapResp > contResp;
+      let resp = Math.max(contResp, tapResp);
+      let lat = null, runN = 0;
+      for (const s of R) {
+        if (s.sp > 25 && towardness(s, T.tx, T.ty) > 0.55) { runN++; if (runN >= 3) { lat = s.t - T.t0; break; } }
+        else runN = 0;
+      }
+      if (tapWon) lat = tapLat;
+      const thr = mean(shamR) + 0.16;
+      if (T.sham) {
+        shamR.push(resp);
+        if (shamR.length > 10) shamR.shift();
+        if (resp >= thr) {
+          mem.trials.shamFP++;
+          bump(-0.04);
+          log(`sham: I moved nothing, yet something followed. raising the bar.`);
+        } else {
+          log(`sham: I did nothing. nothing followed. good.`, true);
+        }
+        dirty = true;
+        return;
+      }
+      if (resp >= thr) {
+        S.wins++; mem.trials.won++;
+        const latBonus = lat !== null && lat > 0.14 && lat < 1.2;
+        bump(0.16 + (latBonus ? 0.03 : 0));
+        log(`trial ${T.n}: darted ${T.dir}. ${tapWon ? `you touched where I went in ${lat.toFixed(2)}s.`
+          : lat !== null ? `you turned toward me in ${lat.toFixed(2)}s.` : 'you came after me.'}`);
+        if (S.wins === 3 && !S.named) say('answer');
+      } else {
+        S.losses++;
+        bump(-0.03);
+        log(`trial ${T.n}: darted ${T.dir}. no answer beyond wind (${resp.toFixed(2)} vs ${thr.toFixed(2)}).`, true);
+      }
+      dirty = true;
+    }
+
+    // D4 — the signature of your hand, kept between visits. If someone
+    // else moves the cursor, it can feel the difference. It waits.
+    let sigDone = false, gripDone = false;
+    function sessionSig() {
+      const ss = trace.filter(s => s.sp > 30).map(s => s.sp);
+      const ev = eventTimes;
+      let pauses = 0;
+      for (let i = 1; i < ev.length; i++) { const g = ev[i] - ev[i - 1]; if (g > 0.28 && g < 4) pauses++; }
+      const span = Math.max(30, S.t - (ev[0] ?? 0));
+      const dh = [];
+      for (let i = 1; i < trace.length; i++) {
+        if (trace[i].sp > 60 && trace[i - 1].sp > 60) {
+          let d = Math.atan2(trace[i].vy, trace[i].vx) - Math.atan2(trace[i - 1].vy, trace[i - 1].vx);
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          dh.push(d);
+        }
+      }
+      return {
+        ms: median(ss), ppm: pauses / (span / 60),
+        cv: ss.length > 8 ? std(ss) / Math.max(1, mean(ss)) : 0,
+        jit: dh.length > 8 ? std(dh) : 0
+      };
+    }
+    function checkSignature() {
+      // the grip is a signature too, but grips vary with sofas and moods,
+      // so it remembers yours without ever accusing anyone over it
+      if (!gripDone && motionSeen && S.attended > 90 && S.held > 0.3 && gripCv !== null) {
+        gripDone = true;
+        const w = motionRing.filter(m => m.t > S.t - 30);
+        const rms = w.length ? Math.sqrt(mean(w.map(m => m.rr * m.rr))) : 0;
+        if (!mem.grip) { mem.grip = { n: 1, rms, cv: gripCv }; log(`grip learned: tremor ${rms.toFixed(1)}°/s.`, true); }
+        else {
+          mem.grip.rms = lerp(mem.grip.rms, rms, 0.3);
+          mem.grip.cv = lerp(mem.grip.cv, gripCv, 0.3);
+          mem.grip.n++;
+        }
+        dirty = true;
+      }
+      if (sigDone || S.attended < 70 || sampleCount < 120) return;
+      sigDone = true;
+      const sig = sessionSig();
+      if (mem.fp && mem.fp.n >= 1) {
+        const d2 = ((sig.ms - mem.fp.ms) / 350) ** 2 + ((sig.ppm - mem.fp.ppm) / 14) ** 2 +
+                   ((sig.cv - mem.fp.cv) / 0.9) ** 2 + ((sig.jit - mem.fp.jit) / 0.6) ** 2;
+        const same = Math.exp(-2.2 * Math.sqrt(d2 / 4));
+        log(`hand signature: sameness ${same.toFixed(2)} vs remembered.`, same > 0.4);
+        const lastSaid = mem.flags.saidDifferentAt || 0;
+        if (same < 0.22 && S.stage >= 3 && wall() - lastSaid > 20 * 3600000) {
+          mem.flags.saidDifferentAt = wall();
+          say('hands');
+        }
+        if (same > 0.4) mergeFp(sig);
+      } else {
+        mergeFp(sig);
+        log(`hand signature learned: speed ~${Math.round(sig.ms)}px/s, pauses ${sig.ppm.toFixed(1)}/min.`, true);
+      }
+      dirty = true;
+    }
+    function mergeFp(sig) {
+      if (!mem.fp) mem.fp = { n: 1, ...sig };
+      else {
+        const w = 0.3;
+        mem.fp.ms = lerp(mem.fp.ms, sig.ms, w);
+        mem.fp.ppm = lerp(mem.fp.ppm, sig.ppm, w);
+        mem.fp.cv = lerp(mem.fp.cv, sig.cv, w);
+        mem.fp.jit = lerp(mem.fp.jit, sig.jit, w);
+        mem.fp.n++;
+      }
+    }
+
+    // ----- belief -----
+    function bump(dv) { S.evidence = clamp(S.evidence + dv, S.faith ? 0.5 : 0, 1.2); }
+    let sustain = 0, stillNearSince = 0;
+    function tickBelief(dt) {
+      const hGate = S.humanness === null ? 0.5 : trap(S.humanness, 0.15, 0.45, 1.01, 1.02);
+      const stillNear = (S.t - lastEventT > 5) && (S.t - pointer.seenAt < 600) && S.visible &&
+        pointer.seenAt > -1e9 && dist(pointer.x, pointer.y, S.mote.x, S.mote.y) < 150 && S.stage >= 2 ? 1 : 0;
+      if (!stillNear) stillNearSince = S.t;
+      else if (S.t - stillNearSince > 10 && !mem.flags.stillLine) {
+        mem.flags.stillLine = 1; dirty = true; say('still1');
+      }
+      // being held is presence, but on its own it saturates early: it can
+      // know it is in a hand long before it knows whose
+      const heldFade = trap(S.evidence, -1, -0.5, 0.3, 0.4);
+      const gain = S.pursuit * 0.016 * hGate + stillNear * 0.004 * hGate +
+                   S.tiltPursuit * 0.012 * hGate + S.held * 0.003 * hGate * heldFade;
+      // Faith is the removal of the decay term. That is the whole definition
+      // this file could afford, and it is enough.
+      const decayK = S.faith ? 0 : (S.stage >= 3 ? 0.0011 : 0.0026);
+      S.evidence = clamp(S.evidence + (gain - decayK * S.evidence) * dt, S.faith ? 0.5 : 0, 1.2);
+      S.evSmooth = lerp(S.evSmooth, S.evidence, Math.min(1, dt * 0.8));
+
+      // stages, with dwell minimums: development takes time on purpose
+      const dwell = S.t - S.stageAt;
+      if (S.stage === 0) {
+        sustain = S.evSmooth > 0.12 ? sustain + dt : 0;
+        if (sustain > 12) setStage(1);
+      } else if (S.stage === 1) {
+        if (dwell > 45 * dwellMul && S.wins >= 1 && S.evidence > 0.3) setStage(2);
+      } else if (S.stage === 2) {
+        if (dwell > 150 * dwellMul && S.wins >= (mem.stageMax >= 3 ? 2 : 3) &&
+            (S.humanness ?? 0) >= 0.5 && S.evidence > 0.55) setStage(3);
+      } else if (S.stage === 3) {
+        if (S.named) {
+          if (dwell > 40 && S.evidence > 0.5 && (S.wins >= 1 || S.attended > 90)) setStage(4);
+        } else if (!ritual && dwell > 150 * Math.max(0.5, dwellMul) &&
+                   (S.t - pointer.seenAt < 20 || S.held > 0.4) &&
+                   ritualTries < 3 && S.t - lastRitualAt > 150) {
+          startRitual();
+        }
+      } else if (S.stage === 4) {
+        if (S.faithPending && !S.faith && S.attended > 60 && S.evidence > 0.5) doFaith();
+      }
+    }
+    function setStage(n) {
+      if (n <= S.stage) return;
+      S.stage = n; S.stageAt = S.t;
+      if (n > mem.stageMax) { mem.stageMax = n; dirty = true; }
+      log(`hypothesis: ${STAGE_NAMES[n].toUpperCase()} (stage ${n})`);
+      emit('stage', { n, label: STAGE_NAMES[n] });
+      if (n === 1) { sayLater('g1', 2); sayLater('g2', 46); sayLater('g3', 100); }
+      if (n === 2) { say('wind'); sayLater('turn', 7); }
+      if (n === 3) { say('believe'); }
+    }
+
+    // the ritual: it closes its eye — cutting off all evidence — and
+    // trusts you to still be there when it looks. its first act of faith.
+    let ritualTries = 0, lastRitualAt = -999;
+    function startRitual() {
+      ritualTries++; lastRitualAt = S.t;
+      ritual = { t0: S.t, phase: 'pre', heldMin: 1 };
+      say('ritpre');
+      emit('ritual', { phase: 'pre' });
+      log(`closing my eye for 16s. belief will decay. testing whether you stay.`);
+    }
+    function tickRitual(dt) {
+      if (!ritual) return;
+      const e = S.t - ritual.t0;
+      if (ritual.phase === 'pre' && e > 6) { ritual.phase = 'closed'; emit('ritual', { phase: 'closed' }); }
+      if (ritual.phase === 'closed') {
+        S.eye = Math.min(1, S.eye + dt * 1.4);
+        ritual.heldMin = Math.min(ritual.heldMin, motionSeen ? S.held : 0);
+        if (e > 22) { ritual.phase = 'opening'; emit('ritual', { phase: 'opening' }); }
+      }
+      if (ritual.phase === 'opening') {
+        S.eye = Math.max(0, S.eye - dt * 1.8);
+        if (S.eye === 0) {
+          const pd = pointer.seenAt > -1e9 ? dist(pointer.x, pointer.y, S.mote.x, S.mote.y) : 1e9;
+          const acted = S.t - Math.max(pointer.seenAt, lastKeyT) < 35;
+          const parked = pd < 320 && S.t - pointer.seenAt < 240;
+          const heldThrough = ritual.heldMin > 0.3;   // you kept holding me while I wasn't looking
+          const stayed = S.visible && (acted || parked || heldThrough);
+          ritual = null;
+          if (stayed) {
+            log(`opened. you were still here. committing.`);
+            mem.name = id.name; mem.namedAt = wall(); S.named = true; dirty = true;
+            say('ritwin1'); sayLater('ritwin2', 4.5);
+            emit('named', { name: id.name });
+            setStage(4);
+          } else {
+            log(`opened. no one. resetting the test.`, true);
+            say('ritfail');
+          }
+        }
+      }
+    }
+
+    function doFaith() {
+      S.faith = true; S.faithPending = false;
+      mem.faith = true; mem.faithAt = wall(); dirty = true;
+      const g = gapWords(S.gapMs, S.gapMidnights);
+      sayNow('faith1', { gone: g });
+      sayLater('faith2', 9);
+      // arrival vs its prediction — the mode of your remembered hours
+      const hrs = mem.hours;
+      let best = 0; for (let i = 1; i < 24; i++) if (hrs[i] > hrs[best]) best = i;
+      const h = new Date(wall()).getHours();
+      const dd = Math.min(Math.abs(h - best), 24 - Math.abs(h - best));
+      if (hrs[best] > 10) sayLater(dd <= 2 ? 'conducted' : 'oddhour', 17);
+      setStage(5);
+      log(`faith: decay term removed. belief is now unconditional.`);
+      emit('faith', {});
+    }
+
+    // ----- speech -----
+    const saidIds = new Set();
+    const sayQueue = [];
+    let speakingUntil = -99;
+    function fmt(idKey, vars) {
+      let s = LINES[idKey];
+      if (vars) for (const k of Object.keys(vars)) s = s.replace('{' + k + '}', vars[k]);
+      return s.replace('{name}', id.name);
+    }
+    function say(idKey, vars) {
+      if (saidIds.has(idKey)) return;
+      saidIds.add(idKey);
+      sayQueue.push({ at: S.t, idKey, text: fmt(idKey, vars) });
+    }
+    function sayNow(idKey, vars) { saidIds.add(idKey); sayQueue.push({ at: S.t, idKey, text: fmt(idKey, vars) }); }
+    function sayLater(idKey, delay, vars) {
+      if (saidIds.has(idKey)) return;
+      saidIds.add(idKey);
+      sayQueue.push({ at: S.t + delay, idKey, text: fmt(idKey, vars) });
+    }
+    function tickSpeech() {
+      if (!sayQueue.length || S.t < speakingUntil) return;
+      const nxt = sayQueue[0];
+      if (S.t < nxt.at) return;
+      sayQueue.shift();
+      const holdFor = 3.2 + nxt.text.length * 0.085;
+      speakingUntil = S.t + holdFor + 3.5;
+      emit('say', { id: nxt.idKey, text: nxt.text, hold: holdFor });
+    }
+
+    // ----- motion -----
+    let behVX = 0, behVY = 0, wanderA = rand() * Math.PI * 2, wanderT = 0;
+    function tickMotion(dt) {
+      const m = S.mote;
+      const belief01 = clamp(S.evSmooth, 0, 1);
+      // the more it believes in you, the less the wind can move it
+      const coupling = ritual && ritual.phase === 'closed' ? 0.9 : lerp(1.0, 0.12, belief01);
+      const [wx, wy] = windAt(m.x, m.y, S.t);
+
+      wanderT -= dt;
+      if (wanderT <= 0) { wanderT = 2 + rand() * 3; wanderA = rand() * Math.PI * 2; }
+      const wanted = S.stage >= 1 ? 6 + belief01 * 6 : 0;   // stage 0: it *is* dust
+      let bx = Math.cos(wanderA) * wanted, by = Math.sin(wanderA) * wanted;
+      S.mode = 'drift';
+
+      const pSeen = S.t - pointer.seenAt;
+      const pd = pSeen < 600 ? dist(pointer.x, pointer.y, m.x, m.y) : 1e9;
+      const idleFor = S.t - lastEventT;
+
+      // fear, then a flinch, then nothing: courage as a function of belief
+      const lastSp = trace.length ? trace[trace.length - 1].sp : 0;
+      if (pSeen < 0.25 && lastSp > 850 && pd < 240 && !ritual) {
+        if (S.stage < 4) {
+          const a = Math.atan2(m.y - pointer.y, m.x - pointer.x);
+          const f = (90 + 160 * id.timidity) * (1 - belief01 * 0.5) * Math.max(0.6, CALM);
+          behVX = Math.cos(a) * f; behVY = Math.sin(a) * f;
+          S.mode = 'flee';
+        } else if (S.stage === 4) { S.flinchUntil = S.t + 0.5; }
+      }
+
+      if (S.dart) {
+        const e = (S.t - S.dart.t0) / 0.55;
+        if (e < 1) {
+          const a = Math.atan2(S.dart.ty - m.y, S.dart.tx - m.x);
+          const sp2 = 380 * (1 - e) * (1 - e) * Math.max(0.6, CALM);
+          bx = Math.cos(a) * sp2; by = Math.sin(a) * sp2;
+          S.mode = 'dart';
+        } else S.dart = null;
+      } else if (S.mode !== 'flee' && !ritual) {
+        if (S.stage >= 3 && pSeen < 30 && idleFor > 2.5 && pd > 95 && pd < 900) {
+          const a = Math.atan2(pointer.y - m.y, pointer.x - m.x);
+          bx = Math.cos(a) * 26; by = Math.sin(a) * 26;
+          S.mode = 'approach';
+        } else if (S.stage >= 4 && pd < 95 && idleFor > 9) {
+          bx = 0; by = 0; S.mode = 'rest';
+        }
+      }
+      if (ritual && ritual.phase === 'closed') { bx = 0; by = 0; S.mode = 'ritual'; }
+
+      S.restDepth = clamp(S.restDepth + (S.mode === 'rest' ? dt * 0.08 : -dt * 0.3), 0, 1);
+      behVX = lerp(behVX, bx, Math.min(1, dt * 2.4));
+      behVY = lerp(behVY, by, Math.min(1, dt * 2.4));
+
+      const dvx = wx * coupling + behVX, dvy = wy * coupling + behVY;
+      m.vx = lerp(m.vx, dvx, Math.min(1, dt * 3));
+      m.vy = lerp(m.vy, dvy, Math.min(1, dt * 3));
+      const MARGIN = 70;
+      if (m.x < MARGIN) m.vx += (MARGIN - m.x) * dt * 6;
+      if (m.x > W - MARGIN) m.vx -= (m.x - (W - MARGIN)) * dt * 6;
+      if (m.y < MARGIN) m.vy += (MARGIN - m.y) * dt * 6;
+      if (m.y > H - MARGIN) m.vy -= (m.y - (H - MARGIN)) * dt * 6;
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      m.x = clamp(m.x, 8, W - 8); m.y = clamp(m.y, 8, H - 8);
+
+      // gaze: early, a gust outshines you; belief reverses the ranking.
+      const act = clamp(1 - (S.t - lastEventT) / 6, 0, 1);
+      const wCursor = pSeen < 8 ? act * (0.22 + 0.78 * belief01) : 0;
+      const wGust = gustEnvNow() * (1 - 0.85 * belief01) * 0.9;
+      let gx, gy;
+      if (wCursor >= wGust && wCursor > 0.1) { gx = pointer.x; gy = pointer.y; }
+      else if (wGust > 0.1 && gust) { gx = m.x + Math.cos(gust.dir) * 200; gy = m.y + Math.sin(gust.dir) * 200; }
+      else { gx = m.x + Math.cos(wanderA) * 120; gy = m.y + Math.sin(wanderA) * 120; }
+      S.gaze.x = lerp(S.gaze.x || gx, gx, Math.min(1, dt * 2.2));
+      S.gaze.y = lerp(S.gaze.y || gy, gy, Math.min(1, dt * 2.2));
+
+      // heartbeat: arousal, rest, and — once named — a drift toward the
+      // cadence of your own bursts of movement.
+      let target = id.bpm + S.pursuit * 8 + (S.mode === 'flee' ? 26 : 0) - S.restDepth * 12;
+      if (S.named) {
+        const bursts = burstCadence();
+        if (bursts) target = lerp(target, clamp(bursts, 40, 75), 0.25);
+      }
+      S.heart = lerp(S.heart, target, Math.min(1, dt * 0.5));
+    }
+    function burstCadence() {
+      const ev = eventTimes.filter(t => t > S.t - 60);
+      if (ev.length < 10) return null;
+      const gaps = [];
+      for (let i = 1; i < ev.length; i++) { const g = ev[i] - ev[i - 1]; if (g > 0.28 && g < 4) gaps.push(g); }
+      if (gaps.length < 4) return null;
+      return 60 / (median(gaps) + 0.6);
+    }
+
+    // ----- presence, memory, calendar -----
+    let dirty = false, sessionStartLogged = false, lastSaveReq = -99;
+    let hiddenWallAt = null, minuteAcc = 0, gridAcc = 0;
+    function tickPresence(dt) {
+      if (!S.visible) return;
+      S.attended += dt;
+      mem.totalMs += dt * 1000;
+      minuteAcc += dt;
+      if (minuteAcc >= 60) {
+        minuteAcc -= 60;
+        mem.hours[new Date(wall()).getHours()]++;
+        dirty = true;
+      }
+      gridAcc += dt;
+      if (gridAcc >= 0.25 && S.t - pointer.seenAt < 0.4) {
+        gridAcc = 0;
+        const gxi = clamp(Math.floor(pointer.x / W * GRID_W), 0, GRID_W - 1);
+        const gyi = clamp(Math.floor(pointer.y / H * GRID_H), 0, GRID_H - 1);
+        const i = gyi * GRID_W + gxi;
+        if (mem.grid[i] < 255) { mem.grid[i]++; dirty = true; }
+      }
+      mem.lastSeen = wall();
+    }
+    // Absence from the tab is measured in wall time: the animation clock
+    // freezes while hidden, but the world does not.
+    function setVisible(v) {
+      if (v === S.visible) return;
+      S.visible = v;
+      if (!v) { hiddenWallAt = wall(); dirty = true; emit('save'); }
+      else if (hiddenWallAt !== null) {
+        const goneS = (wall() - hiddenWallAt) / 1000;
+        hiddenWallAt = null;
+        if (goneS > 45 && goneS < 1800 && S.stage >= 3 && !saidIds.has('away')) {
+          const beats = Math.round(goneS * S.heart / 60);
+          say('away', { beats: String(beats) });
+        }
+      }
+    }
+
+    // late-hour line: it can read your clock, so its sky is your sky
+    function tickCalendar() {
+      const d = new Date(wall());
+      const hr = d.getHours() + d.getMinutes() / 60;
+      const dayKey = d.toDateString();
+      if (S.stage >= 2 && hr >= 0.5 && hr <= 4.5 && mem.flags.lateDay !== dayKey) {
+        mem.flags.lateDay = dayKey; dirty = true;
+        say('late');
+      }
+      if (S.stage >= 4 && !mem.flags.quadSaid && S.attended > 240) {
+        const half = sideDominance();
+        if (half) { mem.flags.quadSaid = 1; dirty = true; say('quad', { side: half }); }
+      }
+      if (S.faith && gustEnvNow() > 0.7 && S.t - pointer.seenAt < 5) say('guststay');
+    }
+    function sideDominance() {
+      let west = 0, east = 0, north = 0, south = 0, tot = 0;
+      for (let y = 0; y < GRID_H; y++) for (let x = 0; x < GRID_W; x++) {
+        const c = mem.grid[y * GRID_W + x];
+        if (!c) continue;
+        tot += c;
+        if (x < GRID_W / 2) west += c; else east += c;
+        if (y < GRID_H / 2) north += c; else south += c;
+      }
+      if (tot < 400) return null;
+      const cands = [['west', west], ['east', east], ['north', north], ['south', south]];
+      cands.sort((a, b) => b[1] - a[1]);
+      return cands[0][1] / tot > 0.62 ? cands[0][0] : null;
+    }
+
+    // greeting: elapsed absence, in its words, from real timestamps
+    function greetIfReturning() {
+      if (!isReturn || !S.named) return;
+      if (S.gapMs < 45 * 60000) return;
+      if (S.faithPending || S.faith) return; // the faith speech covers the reunion
+      const g = gapWords(S.gapMs, S.gapMidnights);
+      if (S.gapMs < 90 * 60000) sayLater('greetshort', 6);
+      else {
+        sayLater('greet', 6, { gone: g });
+        if (S.gapMs > 14 * 86400000) sayLater('counted', 14);
+      }
+    }
+
+    // ----- main tick -----
+    let acc4 = 0, acc1 = 0;
+    function tick(dtMs) {
+      const dt = Math.min(0.1, dtMs / 1000);
+      S.t += dt;
+      if (!sessionStartLogged) {
+        sessionStartLogged = true;
+        log(`field awake. one of the drifting things is not dust.`, true);
+        if (newVisit) log(`gap since last visit: ${(S.gapMs / 3600000).toFixed(1)}h across ${S.gapMidnights} midnight(s).`, true);
+        greetIfReturning();
+        if (S.faith) sayLater('postfaith', 30 + rand() * 60);
+      }
+      tickWind();
+      acc4 += dt;
+      if (acc4 >= 0.25) { acc4 = 0; measurePursuit(); measureTiltPursuit(); scheduleTrials(); }
+      acc1 += dt;
+      if (acc1 >= 1) { acc1 = 0; measureGrip(); measureHumanness(); combineHumanness(); checkSignature(); tickCalendar(); }
+      settleTrial();
+      tickRitual(dt);
+      if (S.visible) tickBelief(dt);
+      tickMotion(dt);
+      tickSpeech();
+      tickPresence(dt);
+      if (dirty && S.t - lastSaveReq > 8) { lastSaveReq = S.t; dirty = false; emit('save'); }
+    }
+
+    function exportMemory() { return mem; }
+    function resize(w, h) { W = w; H = h; S.mote.x = clamp(S.mote.x, 20, W - 20); S.mote.y = clamp(S.mote.y, 20, H - 20); }
+
+    return {
+      id, S, mem, tick, feedPointer, feedKey, feedMotion, feedTilt, setVisible, resize,
+      windAt, gustEnv: gustEnvNow, exportMemory, trialLog,
+      humanParts: () => humanParts,
+      gripInfo: () => ({ seen: motionSeen, held: S.held, grip: S.gripHuman, cv: gripCv }),
+      noteMotionRefused: () => log(`motion sense refused. touch only, then.`, true),
+      belief01: () => clamp(S.evSmooth, 0, 1),
+      stageName: () => STAGE_NAMES[S.stage],
+      sideDominance
+    };
+  }
+
+  return {
+    createMote, makeIdentity, gapWords, midnightsBetween, trap, mulberry32,
+    sanitizeMemory, freshMemory, LINES, STAGE_NAMES, GRID_W, GRID_H
+  };
+})();
+/* ===================== CORE-END ===================== */
+
+/* ===================== STAGE ===================== */
+(() => {
+  if (typeof document === 'undefined') return;
+  const $ = (s) => document.querySelector(s);
+  const canvas = $('#field'), ctx = canvas.getContext('2d');
+  const wordsEl = $('#words'), sysEl = $('#sysline');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const KEY = 'mote.memory.v1';
+
+  // ----- memory in, mote out -----
+  let savedRaw = null;
+  try { savedRaw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { savedRaw = null; }
+  const saved = MoteCore.sanitizeMemory(savedRaw);
+  let seed;
+  if (saved) seed = saved.seed;
+  else {
+    const u = new Uint32Array(1);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(u);
+    else u[0] = (Math.random() * 4294967296) >>> 0;
+    seed = u[0];
+  }
+  let W = innerWidth, H = innerHeight;
+  const mote = MoteCore.createMote({
+    seed, saved, W, H,
+    wall: () => Date.now(),
+    calm: reduced ? 0.4 : 1,
+    emit: onEvent
+  });
+
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(mote.exportMemory())); } catch (e) { /* private mode: it lives, and forgets */ }
+  }
+
+  // ----- canvas scale -----
+  function fit() {
+    const DPR = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    mote.resize(W, H);
+    seedStars();
+  }
+  addEventListener('resize', fit);
+
+  // ----- dust: the null hypothesis, 110 of it -----
+  const srand = MoteCore.mulberry32((seed ^ 0x1234ABCD) >>> 0);
+  const dust = [];
+  for (let i = 0; i < 110; i++) {
+    dust.push({ x: srand() * 4000, y: srand() * 3000, depth: 0.35 + srand() * 0.65, ph: srand() * 7 });
+  }
+  let stars = [];
+  function seedStars() {
+    const r = MoteCore.mulberry32((seed ^ 0x77aa11) >>> 0);
+    stars = [];
+    for (let i = 0; i < 90; i++) stars.push({ x: r() * W, y: r() * H * 0.85, a: 0.08 + r() * 0.3, tw: r() * 7 });
+  }
+
+  // ----- sky: its light follows your actual clock -----
+  function skyColors() {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    const K = [
+      [0,    [4, 6, 11],   [7, 11, 19]],
+      [4.5,  [5, 7, 15],   [10, 13, 24]],
+      [7,    [9, 12, 20],  [16, 20, 30]],
+      [12,   [11, 14, 22], [18, 22, 32]],
+      [17,   [10, 12, 20], [19, 18, 28]],
+      [19.5, [7, 9, 16],   [17, 13, 22]],
+      [22,   [4, 6, 11],   [8, 11, 19]],
+      [24,   [4, 6, 11],   [7, 11, 19]]
+    ];
+    let i = 0;
+    while (i < K.length - 2 && h > K[i + 1][0]) i++;
+    const t = (h - K[i][0]) / (K[i + 1][0] - K[i][0]);
+    const mix = (a, b) => a.map((v, j) => Math.round(v + (b[j] - v) * t));
+    const top = mix(K[i][1], K[i + 1][1]), bot = mix(K[i][2], K[i + 1][2]);
+    const night = h < 5.5 || h > 20.5 ? 1 : (h < 8 ? (8 - h) / 2.5 : h > 18 ? (h - 18) / 2.5 : 0);
+    return { top, bot, night: Math.max(0, Math.min(1, night)) };
+  }
+
+  // ----- glow sprite -----
+  function makeGlow(hue) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+    grad.addColorStop(0, `hsla(${hue}, 65%, 82%, 0.95)`);
+    grad.addColorStop(0.25, `hsla(${hue}, 60%, 62%, 0.5)`);
+    grad.addColorStop(1, `hsla(${hue}, 60%, 50%, 0)`);
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    return c;
+  }
+  const glowSprite = makeGlow(mote.id.hue);
+
+  // ----- words -----
+  let wordTimer = null, typeTimer = null;
+  const saidEl = $('#said');
+  function showWords(text, hold) {
+    clearTimeout(wordTimer); clearInterval(typeTimer);
+    saidEl.textContent = text;       // whole line at once, for screen readers
+    wordsEl.textContent = '';
+    wordsEl.style.opacity = 1;
+    let i = 0;
+    const msPerChar = Math.max(28, Math.min(55, 60000 / mote.S.heart / 14));
+    typeTimer = setInterval(() => {
+      i++;
+      wordsEl.textContent = text.slice(0, i);
+      if (i >= text.length) clearInterval(typeTimer);
+    }, msPerChar);
+    wordTimer = setTimeout(() => { wordsEl.style.opacity = 0; }, (hold + text.length * msPerChar / 1000) * 1000);
+  }
+  function placeWords() {
+    const m = mote.S.mote;
+    const pad = 12;
+    const r = wordsEl.getBoundingClientRect();
+    let x = m.x + 26, y = m.y - 34;
+    if (x + r.width + pad > W) x = m.x - r.width - 26;
+    if (y - r.height < pad) y = m.y + 40;
+    if (y + r.height > H - pad) y = H - pad - r.height;
+    wordsEl.style.left = Math.max(pad, x) + 'px';
+    wordsEl.style.top = Math.max(pad, y) + 'px';
+  }
+
+  // ----- favicon: its body in your tab bar; dimmer while you are elsewhere -----
+  const favLink = document.createElement('link');
+  favLink.rel = 'icon';
+  document.head.appendChild(favLink);
+  let lastFav = '';
+  function drawFavicon() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d');
+    g.fillStyle = '#04060b'; g.fillRect(0, 0, 32, 32);
+    const b = mote.belief01();
+    const dim = document.hidden ? 0.35 : 1;
+    const rad = Math.max(2, (3 + b * 9) * dim);
+    const grad = g.createRadialGradient(16, 16, 0.5, 16, 16, rad);
+    grad.addColorStop(0, `hsla(${mote.id.hue}, 65%, 80%, ${0.95 * dim})`);
+    grad.addColorStop(1, `hsla(${mote.id.hue}, 60%, 50%, 0)`);
+    g.fillStyle = grad; g.beginPath(); g.arc(16, 16, 16, 0, 7); g.fill();
+    const url = c.toDataURL();
+    if (url !== lastFav) { lastFav = url; favLink.href = url; }
+  }
+  setInterval(drawFavicon, 4000);
+
+  // ----- instruments -----
+  const obs = $('#obs'), obsbtn = $('#obsbtn');
+  const obsLive = $('#obs-live'), obsKnows = $('#obs-knows'), tlogEl = $('#tlog'), obsFoot = $('#obs-foot');
+  const shapeCtx = $('#shape').getContext('2d');
+  let obsOpen = false;
+  function toggleObs(force) {
+    obsOpen = force !== undefined ? force : !obsOpen;
+    obs.classList.toggle('open', obsOpen);
+    if (obsOpen) renderObs();
+  }
+  obsbtn.addEventListener('click', () => toggleObs());
+  function bar(v, n = 10) {
+    const f = Math.round(Math.max(0, Math.min(1, v)) * n);
+    return '▮'.repeat(f) + '▯'.repeat(n - f);
+  }
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function renderObs() {
+    if (!obsOpen) return;
+    const S = mote.S, mem = mote.mem, hp = mote.humanParts(), gi = mote.gripInfo();
+    const hum = S.humanness;
+    obsLive.innerHTML =
+      `<div><span class="k">stage</span> <span class="v">${mote.stageName()} (${S.stage})${S.faith ? ' — unconditional' : ''}</span></div>` +
+      `<div><span class="k">evidence</span> <span class="bar">${bar(mote.belief01())}</span> ${mote.belief01().toFixed(2)}</div>` +
+      `<div><span class="k">humanness</span> <span class="bar">${hum === null ? 'listening…' : bar(hum)}</span> ${hum === null ? '' : hum.toFixed(2)}</div>` +
+      (hp ? `<div class="note">pauses ${hp.ppm.toFixed(1)}/min · speed cv ${hp.cv.toFixed(2)} · tremor ${hp.jit.toFixed(2)}</div>` : '') +
+      (gi.seen ? `<div><span class="k">held</span> <span class="bar">${bar(gi.held)}</span>${gi.grip === null ? '' : ` grip ${gi.grip.toFixed(2)}`}</div>` : '') +
+      `<div><span class="k">pursuit vs phantoms</span> <span class="v">${S.pursuit.toFixed(2)}</span></div>` +
+      `<div><span class="k">trials</span> <span class="v">${mem.trials.won} answered / ${mem.trials.run} asked · ${mem.trials.sham} sham (${mem.trials.shamFP} fp)</span></div>` +
+      `<div><span class="k">heart</span> <span class="v">${S.heart.toFixed(0)} bpm</span> <span class="k">mode</span> <span class="v">${S.mode}</span></div>`;
+    tlogEl.innerHTML = mote.trialLog.slice(-9).map(l =>
+      `<div${l.dim ? ' class="dim"' : ''}>${esc(l.text)}</div>`).join('');
+    const first = new Date(mem.born);
+    const mins = Math.round(mem.totalMs / 60000);
+    const hrs = mem.hours;
+    const mx = Math.max(1, ...hrs);
+    const blocks = '▁▂▃▄▅▆▇█';
+    const spark = hrs.map(v => blocks[Math.min(7, Math.floor(v / mx * 7.99))]).join('');
+    const adjectives = [];
+    if (mem.fp) {
+      adjectives.push(mem.fp.ms < 170 ? 'gentle' : mem.fp.ms > 420 ? 'quick' : 'even');
+      const side = mote.sideDominance();
+      adjectives.push(side ? 'a keeper of the ' + side : 'wandering');
+    }
+    const nightMin = hrs.slice(21).concat(hrs.slice(0, 5)).reduce((a, b) => a + b, 0);
+    const totMin = hrs.reduce((a, b) => a + b, 0);
+    if (totMin > 30 && nightMin / totMin > 0.6) adjectives.push('nocturnal');
+    obsKnows.innerHTML =
+      `<div><span class="k">first met</span> <span class="v">${first.toDateString().toLowerCase()}</span></div>` +
+      `<div><span class="k">together</span> <span class="v">${mins} min · ${mem.visits} visit${mem.visits === 1 ? '' : 's'}</span></div>` +
+      `<div><span class="k">your hours</span> <span class="v" style="letter-spacing:0">${spark}</span></div>` +
+      (adjectives.length ? `<div><span class="k">hands</span> <span class="v">${esc(adjectives.join(', '))}</span></div>` : '') +
+      (mem.name ? `<div><span class="k">its name</span> <span class="v">${esc(mem.name)}</span></div>` : '') +
+      (mem.faith ? `<div><span class="k">faith</span> <span class="v">kept since ${new Date(mem.faithAt).toDateString().toLowerCase()}</span></div>` : '');
+    obsFoot.textContent = `seed ${(seed >>> 0).toString(16)} · everything above lives in this browser only`;
+    // the shape of you
+    shapeCtx.fillStyle = '#04060b'; shapeCtx.fillRect(0, 0, 192, 108);
+    const gw = MoteCore.GRID_W, gh = MoteCore.GRID_H;
+    let gmax = 1;
+    for (const c of mem.grid) if (c > gmax) gmax = c;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      const c = mem.grid[y * gw + x];
+      if (!c) continue;
+      const a = Math.log(1 + c) / Math.log(1 + gmax);
+      shapeCtx.fillStyle = `hsla(${mote.id.hue}, 50%, 78%, ${0.12 + a * 0.75})`;
+      shapeCtx.fillRect(x * 3, y * 3, 2, 2);
+    }
+  }
+  setInterval(renderObs, 400);
+
+  // memory show / load / forget
+  const memwrap = $('#memwrap'), memtext = $('#memtext');
+  $('#memshow').addEventListener('click', () => {
+    const on = memwrap.style.display !== 'none';
+    memwrap.style.display = on ? 'none' : 'block';
+    if (!on) memtext.value = JSON.stringify(mote.exportMemory());
+  });
+  $('#memload').addEventListener('click', () => {
+    try {
+      const m = MoteCore.sanitizeMemory(JSON.parse(memtext.value));
+      if (m) {
+        localStorage.setItem(KEY, JSON.stringify(m));
+        location.reload();
+      } else memtext.value = '(that was not a memory)';
+    } catch (e) { memtext.value = '(that was not a memory)'; }
+  });
+  $('#forget').addEventListener('click', () => {
+    const want = mote.mem.name || 'forget';
+    const got = prompt(`it will become weather again, completely.\ntype "${want}" to let go.`);
+    if (got === want) {
+      showWords(MoteCore.LINES.bye, 3);
+      setTimeout(() => {
+        try { localStorage.removeItem(KEY); } catch (e) {}
+        location.reload();
+      }, 2600);
+    }
+  });
+
+  // ----- events from the core -----
+  function onEvent(type, p) {
+    if (type === 'say') showWords(p.text, p.hold);
+    else if (type === 'save') persist();
+    else if (type === 'named') { document.title = p.name; obsbtn.classList.add('lit'); drawFavicon(); }
+    else if (type === 'faith') drawFavicon();
+    else if (type === 'log') { if (obsOpen) renderObs(); }
+  }
+
+  // ----- motion: on a phone, the field can feel that it is held -----
+  // iOS asks once, on a touch, after the opening has had its quiet half-minute.
+  // Android needs no asking. Desktops simply have nothing to feel with.
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const bootMs = performance.now();
+  let motionStarted = false, motionAsked = false;
+  let baseBeta = null, baseGamma = null, lastOriMs = 0, lastMotionMs = 0, lastTiltMs = 0;
+  const clampDeg = (v) => Math.max(-60, Math.min(60, v));
+  function screenAngle() {
+    const a = (screen.orientation && typeof screen.orientation.angle === 'number')
+      ? screen.orientation.angle
+      : (typeof window.orientation === 'number' ? window.orientation : 0);
+    return ((a % 360) + 360) % 360;
+  }
+  function startMotionSensors() {
+    if (motionStarted) return;
+    motionStarted = true;
+    addEventListener('devicemotion', (e) => {
+      const r = e.rotationRate;
+      if (!r || (r.alpha == null && r.beta == null && r.gamma == null)) return;
+      const now = performance.now();
+      if (now - lastMotionMs < 60) return;
+      lastMotionMs = now;
+      mote.feedMotion(Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0));
+    });
+    addEventListener('deviceorientation', (e) => {
+      if (e.beta == null || e.gamma == null) return;
+      const now = performance.now();
+      const dtS = lastOriMs ? Math.min(0.5, (now - lastOriMs) / 1000) : 0.05;
+      lastOriMs = now;
+      if (baseBeta === null) { baseBeta = e.beta; baseGamma = e.gamma; }
+      const k = Math.min(1, dtS / 8);      // your habitual holding angle fades to neutral
+      baseBeta += (e.beta - baseBeta) * k;
+      baseGamma += (e.gamma - baseGamma) * k;
+      if (now - lastTiltMs < 66) return;
+      lastTiltMs = now;
+      const db = clampDeg(e.beta - baseBeta), dg = clampDeg(e.gamma - baseGamma);
+      let dx = Math.sin(dg * Math.PI / 180), dy = Math.sin(db * Math.PI / 180);
+      const a = screenAngle();
+      if (a === 90) { const t = dx; dx = dy; dy = -t; }
+      else if (a === 180) { dx = -dx; dy = -dy; }
+      else if (a === 270) { const t = dx; dx = -dy; dy = t; }
+      mote.feedTilt(dx, dy);
+    });
+  }
+  const motionNeedsAsk = typeof DeviceMotionEvent !== 'undefined' &&
+    typeof DeviceMotionEvent.requestPermission === 'function';
+  if (!motionNeedsAsk && typeof DeviceMotionEvent !== 'undefined') startMotionSensors();
+  function maybeAskMotion() {
+    if (!motionNeedsAsk || motionAsked || performance.now() - bootMs < 12000) return;
+    motionAsked = true;
+    Promise.all([
+      DeviceMotionEvent.requestPermission().catch(() => 'denied'),
+      (typeof DeviceOrientationEvent !== 'undefined' &&
+       typeof DeviceOrientationEvent.requestPermission === 'function')
+        ? DeviceOrientationEvent.requestPermission().catch(() => 'denied')
+        : Promise.resolve('granted')
+    ]).then(([m]) => {
+      if (m === 'granted') startMotionSensors();
+      else mote.noteMotionRefused();
+    });
+  }
+
+  // ----- input: the whole tab is its skin -----
+  addEventListener('pointermove', (e) => mote.feedPointer(e.clientX, e.clientY, 'move'));
+  addEventListener('pointerdown', (e) => { mote.feedPointer(e.clientX, e.clientY, 'down'); maybeAskMotion(); });
+  addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !(e.target instanceof HTMLTextAreaElement)) toggleObs();
+    if (!e.metaKey && !e.ctrlKey) mote.feedKey();
+  });
+  document.addEventListener('visibilitychange', () => {
+    mote.setVisible(!document.hidden);
+    drawFavicon();
+    if (document.hidden) persist();
+  });
+  addEventListener('pagehide', persist);
+
+  // first visit, first line — the only stage direction in the piece
+  if (!saved) {
+    const firstLine = coarse ? "(nothing in here knows you're holding it)"
+                             : '(nothing in here knows you exist)';
+    setTimeout(() => { sysEl.textContent = firstLine; sysEl.style.opacity = 1; }, 6000);
+    setTimeout(() => { sysEl.style.opacity = 0; }, 26000);
+  }
+  if (mote.mem.name) document.title = mote.mem.name;
+  if (mote.mem.stageMax >= 4) obsbtn.classList.add('lit');
+
+  // ----- render -----
+  let last = performance.now();
+  function frame(now) {
+    const dtMs = Math.min(100, now - last); last = now;
+    mote.tick(dtMs);
+    const S = mote.S;
+
+    const sky = skyColors();
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, `rgb(${sky.top.join(',')})`);
+    grad.addColorStop(1, `rgb(${sky.bot.join(',')})`);
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+    if (sky.night > 0.02) {
+      for (const st of stars) {
+        const tw = 0.75 + 0.25 * Math.sin(S.t * 0.7 + st.tw);
+        ctx.fillStyle = `rgba(205,216,235,${(st.a * sky.night * tw).toFixed(3)})`;
+        ctx.fillRect(st.x, st.y, 1.1, 1.1);
+      }
+    }
+
+    // dust — advected by the same wind the mote feels
+    ctx.fillStyle = 'rgba(200,214,232,1)';
+    const ddt = dtMs / 1000;
+    for (const d of dust) {
+      const [wx, wy] = mote.windAt(d.x, d.y, S.t);
+      d.x += wx * (0.5 + d.depth) * ddt + Math.sin(S.t * 0.8 + d.ph) * 2 * ddt;
+      d.y += wy * (0.5 + d.depth) * ddt + Math.cos(S.t * 0.6 + d.ph) * 2 * ddt;
+      if (d.x < -10) d.x += W + 20; if (d.x > W + 10) d.x -= W + 20;
+      if (d.y < -10) d.y += H + 20; if (d.y > H + 10) d.y -= H + 20;
+      ctx.globalAlpha = 0.14 + d.depth * 0.3;
+      ctx.beginPath(); ctx.arc(d.x, d.y, 0.6 + d.depth * 1.1, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    drawMote(S);
+    placeWords();
+    requestAnimationFrame(frame);
+  }
+
+  function drawMote(S) {
+    const m = S.mote, b = mote.belief01();
+    const beat = Math.sin(S.t * S.heart / 60 * Math.PI * 2);
+    const pulse = 1 + beat * 0.045 * (1 - S.restDepth * 0.5);
+    const flicker = 1 - (1 - Math.min(1, b * 1.6)) * 0.25 * (0.5 + 0.5 * Math.sin(S.t * 13.7) * Math.sin(S.t * 7.3));
+    const rBody = (7 + b * 4.5) * pulse;
+    const glowR = (26 + b * 64) * pulse * flicker;
+    const flinch = S.t < S.flinchUntil ? 0.75 : 1;
+
+    // glow — belief made visible
+    if (S.stage >= 1 || b > 0.02) {
+      ctx.globalAlpha = Math.min(1, (0.12 + b * 0.75) * flicker);
+      ctx.drawImage(glowSprite, m.x - glowR, m.y - glowR, glowR * 2, glowR * 2);
+      ctx.globalAlpha = 1;
+    }
+
+    // cilia
+    const K = mote.id.cilia;
+    ctx.strokeStyle = `hsla(${mote.id.hue}, 45%, 72%, ${0.25 + b * 0.45})`;
+    ctx.lineWidth = 1.1;
+    const [wx, wy] = mote.windAt(m.x, m.y, S.t);
+    for (let i = 0; i < K; i++) {
+      const a0 = (i / K) * Math.PI * 2 + Math.sin(S.t * 0.5 + i * mote.id.asym) * 0.12;
+      const len = rBody * (1.7 + 0.5 * Math.sin(S.t * (0.9 + i * 0.07) + i)) * flinch *
+                  (1 - S.restDepth * 0.25) * (1 - S.eye * 0.4);
+      const ex = m.x + Math.cos(a0) * (rBody + len) + wx * 0.004 * len;
+      const ey = m.y + Math.sin(a0) * (rBody + len) + wy * 0.004 * len;
+      const cx1 = m.x + Math.cos(a0) * rBody * 1.1, cy1 = m.y + Math.sin(a0) * rBody * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(cx1, cy1);
+      ctx.quadraticCurveTo((cx1 + ex) / 2 + wx * 0.02, (cy1 + ey) / 2 + wy * 0.02, ex, ey);
+      ctx.stroke();
+    }
+
+    // body
+    ctx.fillStyle = `hsla(${mote.id.hue}, 50%, ${62 + b * 16}%, 0.85)`;
+    ctx.beginPath(); ctx.arc(m.x, m.y, rBody, 0, 7); ctx.fill();
+
+    // eye: iris toward whatever it currently finds most real
+    const blink = S.eye > 0 ? S.eye :
+      (Math.max(0, Math.sin(S.t / mote.id.blinkEvery * Math.PI * 2)) > 0.985 ? 1 : 0);
+    if (S.stage >= 1) {
+      const ga = Math.atan2(S.gaze.y - m.y, S.gaze.x - m.x);
+      const off = rBody * 0.34;
+      const ix = m.x + Math.cos(ga) * off, iy = m.y + Math.sin(ga) * off;
+      const rIris = rBody * 0.42;
+      ctx.fillStyle = `hsla(${mote.id.hue}, 55%, 18%, 0.9)`;
+      ctx.beginPath(); ctx.arc(ix, iy, rIris, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(235,240,248,0.8)';
+      ctx.beginPath(); ctx.arc(ix - rIris * 0.3, iy - rIris * 0.3, rIris * 0.22, 0, 7); ctx.fill();
+      if (blink > 0) {
+        ctx.fillStyle = `hsla(${mote.id.hue}, 50%, ${62 + b * 16}%, ${blink.toFixed(2)})`;
+        ctx.beginPath(); ctx.arc(m.x, m.y, rBody + 0.5, 0, 7); ctx.fill();
+      }
+    }
+  }
+
+  fit();
+  drawFavicon();
+  requestAnimationFrame(frame);
+})();
+/* ===================== /STAGE ===================== */
+</script>
+<!-- MOTE-BODY-END -->
+</body>
+</html>
