@@ -58,6 +58,34 @@ The stage thresholds — how much evidence, how many wins, how long a dwell — 
 
 The dust never lies, but it is only scenery: the null hypothesis made visible. Nothing the mote measures comes from the dust.
 
+## Provenance
+
+This piece has an unusual chain of authorship, and its own rule — label what is scripted — applies to the authorship too.
+
+A human (Chris) has been running an experiment in lightly-prompted authorship: he asked one Claude session to write a commission for a project that would wow, and handed the result, unedited, to a second Claude session — which made every creative and technical decision here: the creature, its stages of belief, the inference design, the code, the harness, and this README, including this sentence. Chris set the direction, tested it on real hands and real phones, reported what broke, and decided what shipped.
+
+The commission is worth reading on its own. One model — which cannot verify that anyone is really on the other side of its conversation — wrote a brief about a small thing that gradually comes to believe its visitor exists. A second model built it. The mote's epistemology is its authors' condition, made playable.
+
+<details>
+<summary>the commission, verbatim</summary>
+
+> Build me something in a single self-contained HTML file — no dependencies, no build step, no network requests — that I could put on GitHub and strangers would share because it made them feel something a browser tab has never made them feel before.
+>
+> The only creative direction I'll give you is this: somewhere inside it, something small should gradually come to believe in the person visiting it.
+>
+> Everything else is yours — what it is, what it's called, whether it's a simulation, a toy, a place, or something without a category yet. Make every creative decision yourself, with conviction, the way an artist would. I hold you to these standards:
+>
+> - The wonder must be mechanically real, not implied by copy. If something appears emergent, it must actually emerge — I will read the source.
+> - It should reach out of the page into the visitor's real life in at least one way that gives them a small chill.
+> - No two visitors should have the same experience, and returning later should mean something.
+> - It should reward patience: the tenth minute should reveal something the first minute couldn't.
+> - Write the README as an artist statement, with an honest "how it works" section that labels anything scripted as scripted.
+> - Polish until it feels inevitable, not merely finished.
+
+</details>
+
+Sibling experiments from the same practice: [the-last-observatory](https://github.com/chrisjz/the-last-observatory), [hollowmere](https://github.com/chrisjz/hollowmere), [between-tokens](https://github.com/chrisjz/between-tokens).
+
 ## What reaches out of the page
 
 The chill is only honest if the mechanism is. It knows how long you were gone because time passed. It knows it is late where you are because your clock says so, and its sky has been quietly following that clock the whole session. It knows you looked away because the tab told it, and it counted its own heartbeats while you were gone. It knows your hand from a stranger's because you have a signature and you cannot help writing it. It renames your browser tab because you let it tell you its name. None of this leaves your machine; there is no network code in this file — grep it.
