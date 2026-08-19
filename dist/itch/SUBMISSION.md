@@ -12,7 +12,7 @@ synthetic hand (the same one `harness.mjs` uses to prove the mechanics).
 | Field | Value |
 |---|---|
 | **Title** | `mote` |
-| **Project URL** | `https://chrisjz.itch.io/mote` |
+| **Project URL** | `https://cjros.itch.io/mote` |
 | **Short description / tagline** | `a small thing that learns to tell you from the wind` |
 | **Classification** | Games |
 | **Kind of project** | HTML — "This file will be played in the browser" |

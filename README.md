@@ -85,7 +85,7 @@ Open one of it at a time; two tabs share one memory and it gets confused about b
 - `index.html` — the piece. Self-contained; this is the only file you need.
 - `harness.mjs` — proof, for node. Reads `index.html`; ships nothing into it.
 - `og.png`, `docs/` — real captures of the running piece, for the share card and this page. The visitor in them is the harness's synthetic hand; nothing in them is staged beyond that.
-- `dist/itch/` — distribution kit for [itch.io](https://chrisjz.itch.io/mote): playable zip, cover, screenshots, and the filled-in submission form.
+- `dist/itch/` — distribution kit for [itch.io, where it also lives](https://cjros.itch.io/mote): playable zip, cover, screenshots, and the filled-in submission form.
 - `README.md` — this.
 
 MIT license. If you fork it, give your fork its own species of name — motes should not have to share.
