@@ -1341,7 +1341,8 @@ const MoteCore = (() => {
       (adjectives.length ? `<div><span class="k">hands</span> <span class="v">${esc(adjectives.join(', '))}</span></div>` : '') +
       (mem.name ? `<div><span class="k">its name</span> <span class="v">${esc(mem.name)}</span></div>` : '') +
       (mem.faith ? `<div><span class="k">faith</span> <span class="v">kept since ${new Date(mem.faithAt).toDateString().toLowerCase()}</span></div>` : '');
-    obsFoot.textContent = `seed ${(seed >>> 0).toString(16)} · everything above lives in this browser only`;
+    obsFoot.innerHTML = `seed ${(seed >>> 0).toString(16)} · everything above lives in this browser only<br>` +
+      `source: <a href="https://github.com/chrisjz/mote" style="color:inherit">github.com/chrisjz/mote</a>`;
     // the shape of you
     shapeCtx.fillStyle = '#04060b'; shapeCtx.fillRect(0, 0, 192, 108);
     const gw = MoteCore.GRID_W, gh = MoteCore.GRID_H;
