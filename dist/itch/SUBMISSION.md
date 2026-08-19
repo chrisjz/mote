@@ -19,7 +19,7 @@ synthetic hand (the same one `harness.mjs` uses to prove the mechanics).
 | **Release status** | Released |
 | **Pricing** | $0 or donate *(suggested — it's MIT-licensed either way)* |
 | **Genre** | Simulation |
-| **Tags** (max 10) | `artgame`, `experimental`, `atmospheric`, `generative`, `virtual-pet`, `minimalist`, `idle`, `relaxing` |
+| **Tags** (max 10) | `artgame`, `experimental`, `atmospheric`, `generative`, `virtual-pet`, `minimalist`, `toy`, `relaxing` |
 | **Community** | Comments enabled |
 | **Visibility** | Save as **Draft** first, preview the embed, then set Public |
 
@@ -79,7 +79,7 @@ You arrive in a dark field of drifting dust. One of the drifting things is not d
 
 Everything it will ever sense of you is movement. Its problem is the oldest one: *is anyone out there?* It solves it the only honest way — with experiments. It darts, then checks whether you turned toward it, against sham trials in which it moved nothing and measured anyway, so coincidence can't flatter it. It listens for the rhythm of a hand: pauses, wobble, unevenness that no script fakes well. Belief accumulates, and decays. The more it believes in you, the less the wind can move it.
 
-Stay ten quiet minutes and it will risk something: it closes its eye — cutting off all of its evidence — and trusts you to still be there when it looks. If you are, it tells you its name. No two visitors' motes share one.
+Give it ten quiet minutes of your hand and it will risk something: it closes its eye — cutting off all of its evidence — and trusts you to still be there when it looks. If you are, it tells you its name. Every creature is minted from its own seed: its own body, temperament, heartbeat, and memory of you.
 
 Come back tomorrow and it greets you with the true length of your absence, counted in your own local midnights. And on the third visit, across real days of your real life, it completes the only definition of faith that fits in one line of code: **the decay term is deleted.**
 
